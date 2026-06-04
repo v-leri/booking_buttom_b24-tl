@@ -2,16 +2,19 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>LavinaBooking TL</title>
-
-  <script src="https://api.bitrix24.com/api/v1/"></script>
+  <title>LavinaBooking TL MVP</title>
 
   <style>
+    /* =========================
+       БАЗОВЫЕ СТИЛИ СТРАНИЦЫ
+       ========================= */
+
     body {
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       padding: 20px;
     }
 
+    /* КНОПКА БРОНИРОВАНИЯ */
     .btn {
       padding: 10px 14px;
       border: 1px solid #ccc;
@@ -21,6 +24,7 @@
       font-size: 14px;
     }
 
+    /* ВЫПАДАЮЩИЙ СПИСОК */
     .dropdown {
       margin-top: 10px;
       display: none;
@@ -28,9 +32,14 @@
       border-radius: 6px;
       padding: 10px;
       background: #fff;
-      max-width: 300px;
+      max-width: 320px;
+
+      /* важно для UI */
+      position: absolute;
+      z-index: 9999;
     }
 
+    /* ЭЛЕМЕНТ ОТЕЛЯ */
     .item {
       padding: 6px;
       cursor: pointer;
@@ -40,6 +49,7 @@
       background: #f2f2f2;
     }
 
+    /* СЕРЫЙ КОД ОТЕЛЯ */
     .code {
       color: #999;
       font-size: 12px;
@@ -50,100 +60,173 @@
 
 <body>
 
+<!-- =========================
+     КНОПКА БРОНИРОВАНИЯ
+     ========================= -->
 <button class="btn" id="mainBtn">
-  Забронировать в ОТЕЛЬ 1 ▼
+  Загружаем отели...
 </button>
 
+<!-- =========================
+     DROPDOWN СПИСОК ОТЕЛЕЙ
+     ========================= -->
 <div class="dropdown" id="dropdown"></div>
 
 <script>
 
-let hotels = [];
-let selectedHotel = null;
-let dealId = null;
-let contactId = null;
+  /* =========================================================
+     1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
+     ========================================================= */
 
-// загрузка отелей
-fetch("hotels.json")
-  .then(r => r.json())
-  .then(data => {
-    hotels = data;
-    selectedHotel = hotels[0];
-    renderButton();
-    renderDropdown();
-  });
+  let hotels = [];           // список отелей
+  let selectedHotel = null;  // выбранный отель
 
-// Bitrix context
-BX24.init(function () {
-  const placement = BX24.placement.info();
-  dealId = placement.options.ID;
-});
+  let dealId = null;         // ID сделки (Bitrix)
+  let contactId = null;      // ID контакта (Bitrix)
 
-// кнопка
-function renderButton() {
-  document.getElementById("mainBtn").innerText =
-    `Забронировать в ${selectedHotel.name} ▼`;
-}
+  /* =========================================================
+     2. ЗАГРУЗКА ОТЕЛЕЙ С JSON
+     ========================================================= */
 
-// dropdown
-function renderDropdown() {
-  const dd = document.getElementById("dropdown");
-  dd.innerHTML = "";
+  fetch("hotels.json")
+    .then(res => res.json())
+    .then(data => {
 
-  hotels.forEach(h => {
-    const div = document.createElement("div");
-    div.className = "item";
+      hotels = data;
 
-    div.innerHTML = `
-      ${h.name}
-      <span class="code">${h.providerId}</span>
-    `;
+      // по умолчанию берём первый отель
+      selectedHotel = hotels[0];
 
-    div.onclick = () => {
-      selectedHotel = h;
       renderButton();
+      renderDropdown();
+    })
+    .catch(err => {
+      console.error("Ошибка загрузки hotels.json", err);
+    });
+
+  /* =========================================================
+     3. БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ BITRIX24
+     (ВАЖНО: НЕ ПАДАЕТ ЕСЛИ BITRIX НЕТ)
+     ========================================================= */
+
+  function initBitrixSafe() {
+
+    // если BX24 не существует — просто выходим
+    if (typeof BX24 === "undefined") {
+      console.warn("BX24 не найден (режим обычного сайта)");
+      return;
+    }
+
+    // безопасная инициализация
+    BX24.init(function () {
+
+      try {
+        const placement = BX24.placement.info();
+
+        dealId = placement?.options?.ID || null;
+
+        console.log("Bitrix dealId:", dealId);
+
+      } catch (e) {
+        console.error("Ошибка BX24 placement", e);
+      }
+    });
+  }
+
+  /* =========================================================
+     4. РЕНДЕР КНОПКИ
+     ========================================================= */
+
+  function renderButton() {
+    document.getElementById("mainBtn").innerText =
+      `Забронировать в ${selectedHotel.name} ▼`;
+  }
+
+  /* =========================================================
+     5. РЕНДЕР DROPDOWN
+     ========================================================= */
+
+  function renderDropdown() {
+
+    const dd = document.getElementById("dropdown");
+    dd.innerHTML = "";
+
+    hotels.forEach(h => {
+
+      const div = document.createElement("div");
+      div.className = "item";
+
+      div.innerHTML = `
+        ${h.name}
+        <span class="code">${h.providerId}</span>
+      `;
+
+      div.onclick = () => {
+        selectedHotel = h;
+        renderButton();
+        dd.style.display = "none";
+      };
+
+      dd.appendChild(div);
+    });
+  }
+
+  /* =========================================================
+     6. ЛОГИКА КНОПКИ
+     ========================================================= */
+
+  function setupEvents() {
+
+    const btn = document.getElementById("mainBtn");
+    const dd = document.getElementById("dropdown");
+
+    // открыть / закрыть dropdown
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      dd.style.display = (dd.style.display === "block") ? "none" : "block";
+    });
+
+    // закрытие при клике вне
+    document.addEventListener("click", function () {
       dd.style.display = "none";
+    });
+
+    // БРОНИРОВАНИЕ (двойной клик для MVP)
+    btn.addEventListener("dblclick", book);
+  }
+
+  /* =========================================================
+     7. ОТКРЫТИЕ TRAVEL LINE
+     ========================================================= */
+
+  function book() {
+
+    const payload = {
+      firstName: "Test",
+      lastName: "User",
+      providerId: selectedHotel.providerId,
+      dealId: dealId || "0",
+      contactId: contactId || "0"
     };
 
-    dd.appendChild(div);
-  });
-}
+    const url =
+      "https://secure.travelline.ru/app/webpms/extranet/#/WebPmsBookingNew/" +
+      encodeURIComponent(JSON.stringify(payload)) +
+      "/WebPmsReservations";
 
-// toggle dropdown
-document.getElementById("mainBtn").onclick = () => {
-  const dd = document.getElementById("dropdown");
-  dd.style.display = dd.style.display === "block" ? "none" : "block";
-};
-
-// клик вне
-document.addEventListener("click", function(e) {
-  if (!e.target.closest(".btn") && !e.target.closest(".dropdown")) {
-    document.getElementById("dropdown").style.display = "none";
+    window.open(url, "_blank");
   }
-});
 
-// TravelLine
-function book() {
+  /* =========================================================
+     8. СТАРТ ПРИЛОЖЕНИЯ
+     ========================================================= */
 
-  const payload = {
-    firstName: "Test",
-    lastName: "User",
-    providerId: selectedHotel.providerId,
-    dealId: dealId || "0",
-    contactId: contactId || "0"
-  };
+  window.addEventListener("load", function () {
 
-  const url =
-    "https://secure.travelline.ru/app/webpms/extranet/#/WebPmsBookingNew/" +
-    encodeURIComponent(JSON.stringify(payload)) +
-    "/WebPmsReservations";
+    setupEvents();      // UI
+    initBitrixSafe();   // Bitrix (если есть)
 
-  const win = window.open("", "_blank");
-  win.location.href = url;
-}
-
-// двойной клик по кнопке = бронирование
-document.getElementById("mainBtn").ondblclick = book;
+  });
 
 </script>
 
