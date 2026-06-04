@@ -6,7 +6,7 @@
 
   <style>
     /* =========================
-       БАЗОВЫЕ СТИЛИ СТРАНИЦЫ
+       БАЗОВЫЙ СТИЛЬ
        ========================= */
 
     body {
@@ -14,34 +14,46 @@
       padding: 20px;
     }
 
-    /* КНОПКА БРОНИРОВАНИЯ */
-    .btn {
-      padding: 10px 14px;
+    /* КОНТЕЙНЕР КНОПКИ (чтобы разделить зоны клика) */
+    .btn-wrapper {
+      display: inline-flex;
       border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    /* ОСНОВНАЯ КНОПКА (клик = бронирование) */
+    .btn-main {
+      padding: 10px 14px;
       background: #fff;
       cursor: pointer;
-      border-radius: 6px;
+      border: none;
       font-size: 14px;
     }
 
-    /* ВЫПАДАЮЩИЙ СПИСОК */
+    /* КНОПКА СТРЕЛКИ (клик = dropdown) */
+    .btn-arrow {
+      padding: 10px 12px;
+      background: #f5f5f5;
+      cursor: pointer;
+      border: none;
+      border-left: 1px solid #ccc;
+    }
+
+    /* DROPDOWN */
     .dropdown {
-      margin-top: 10px;
+      margin-top: 8px;
       display: none;
       border: 1px solid #ddd;
       border-radius: 6px;
-      padding: 10px;
       background: #fff;
       max-width: 320px;
-
-      /* важно для UI */
       position: absolute;
       z-index: 9999;
     }
 
-    /* ЭЛЕМЕНТ ОТЕЛЯ */
     .item {
-      padding: 6px;
+      padding: 8px;
       cursor: pointer;
     }
 
@@ -49,7 +61,6 @@
       background: #f2f2f2;
     }
 
-    /* СЕРЫЙ КОД ОТЕЛЯ */
     .code {
       color: #999;
       font-size: 12px;
@@ -61,90 +72,88 @@
 <body>
 
 <!-- =========================
-     КНОПКА БРОНИРОВАНИЯ
+     КНОПКА + СТРЕЛКА
      ========================= -->
-<button class="btn" id="mainBtn">
-  Загружаем отели...
-</button>
+<div class="btn-wrapper">
 
-<!-- =========================
-     DROPDOWN СПИСОК ОТЕЛЕЙ
-     ========================= -->
+  <!-- основная кнопка -->
+  <button class="btn-main" id="mainBtn">
+    Загружаем отели...
+  </button>
+
+  <!-- стрелка -->
+  <button class="btn-arrow" id="arrowBtn">
+    ▼
+  </button>
+
+</div>
+
+<!-- dropdown -->
 <div class="dropdown" id="dropdown"></div>
 
 <script>
 
-  /* =========================================================
-     1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
-     ========================================================= */
+  /* =========================
+     ДАННЫЕ
+     ========================= */
 
-  let hotels = [];           // список отелей
-  let selectedHotel = null;  // выбранный отель
+  let hotels = [];
+  let selectedHotel = null;
 
-  let dealId = null;         // ID сделки (Bitrix)
-  let contactId = null;      // ID контакта (Bitrix)
+  let dealId = null;
+  let contactId = null;
 
-  /* =========================================================
-     2. ЗАГРУЗКА ОТЕЛЕЙ С JSON
-     ========================================================= */
+  /* =========================
+     ЗАГРУЗКА ОТЕЛЕЙ
+     ========================= */
 
   fetch("hotels.json")
-    .then(res => res.json())
+    .then(r => r.json())
     .then(data => {
 
       hotels = data;
-
-      // по умолчанию берём первый отель
       selectedHotel = hotels[0];
 
       renderButton();
       renderDropdown();
     })
     .catch(err => {
-      console.error("Ошибка загрузки hotels.json", err);
+      console.error("Ошибка hotels.json", err);
     });
 
-  /* =========================================================
-     3. БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ BITRIX24
-     (ВАЖНО: НЕ ПАДАЕТ ЕСЛИ BITRIX НЕТ)
-     ========================================================= */
+  /* =========================
+     BITRIX SAFE INIT
+     ========================= */
 
-  function initBitrixSafe() {
+  function initBitrix() {
 
-    // если BX24 не существует — просто выходим
     if (typeof BX24 === "undefined") {
-      console.warn("BX24 не найден (режим обычного сайта)");
+      console.warn("BX24 не найден (обычный режим)");
       return;
     }
 
-    // безопасная инициализация
     BX24.init(function () {
-
       try {
         const placement = BX24.placement.info();
-
         dealId = placement?.options?.ID || null;
-
-        console.log("Bitrix dealId:", dealId);
-
       } catch (e) {
-        console.error("Ошибка BX24 placement", e);
+        console.error("BX24 error", e);
       }
     });
   }
 
-  /* =========================================================
-     4. РЕНДЕР КНОПКИ
-     ========================================================= */
+  /* =========================
+     ОТОБРАЖЕНИЕ КНОПКИ
+     ========================= */
 
   function renderButton() {
     document.getElementById("mainBtn").innerText =
-      `Забронировать в ${selectedHotel.name} ▼`;
+      `Забронировать в ${selectedHotel.name}`;
   }
 
-  /* =========================================================
-     5. РЕНДЕР DROPDOWN
-     ========================================================= */
+  /* =========================
+     DROPDOWN ОТЕЛЕЙ
+     ========================= */
 
   function renderDropdown() {
 
@@ -161,45 +170,61 @@
         <span class="code">${h.providerId}</span>
       `;
 
+      /* =========================
+         ОДИН КЛИК = ВЫБОР + БРОНЬ
+         ========================= */
       div.onclick = () => {
         selectedHotel = h;
         renderButton();
         dd.style.display = "none";
+
+        openTravelLine(); // ВАЖНО: сразу открываем
       };
 
       dd.appendChild(div);
     });
   }
 
-  /* =========================================================
-     6. ЛОГИКА КНОПКИ
-     ========================================================= */
+  /* =========================
+     ПОВЕДЕНИЕ КНОПОК
+     ========================= */
 
   function setupEvents() {
 
-    const btn = document.getElementById("mainBtn");
+    const mainBtn = document.getElementById("mainBtn");
+    const arrowBtn = document.getElementById("arrowBtn");
     const dd = document.getElementById("dropdown");
 
-    // открыть / закрыть dropdown
-    btn.addEventListener("click", function (e) {
+    /* =========================
+       КЛИК ПО ОСНОВНОЙ КНОПКЕ
+       → СРАЗУ БРОНИРОВАНИЕ
+       ========================= */
+    mainBtn.addEventListener("click", () => {
+      openTravelLine();
+    });
+
+    /* =========================
+       КЛИК ПО СТРЕЛКЕ
+       → ОТКРЫТЬ DROPDOWN
+       ========================= */
+    arrowBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       dd.style.display = (dd.style.display === "block") ? "none" : "block";
     });
 
-    // закрытие при клике вне
-    document.addEventListener("click", function () {
+    /* =========================
+       ЗАКРЫТИЕ ПО КЛИКУ ВНЕ
+       ========================= */
+    document.addEventListener("click", () => {
       dd.style.display = "none";
     });
-
-    // БРОНИРОВАНИЕ (двойной клик для MVP)
-    btn.addEventListener("dblclick", book);
   }
 
-  /* =========================================================
-     7. ОТКРЫТИЕ TRAVEL LINE
-     ========================================================= */
+  /* =========================
+     TRAVEL LINE OPEN
+     ========================= */
 
-  function book() {
+  function openTravelLine() {
 
     const payload = {
       firstName: "Test",
@@ -214,17 +239,18 @@
       encodeURIComponent(JSON.stringify(payload)) +
       "/WebPmsReservations";
 
+    // ВАЖНО: открытие окна
     window.open(url, "_blank");
   }
 
-  /* =========================================================
-     8. СТАРТ ПРИЛОЖЕНИЯ
-     ========================================================= */
+  /* =========================
+     СТАРТ ПРИЛОЖЕНИЯ
+     ========================= */
 
-  window.addEventListener("load", function () {
+  window.addEventListener("load", () => {
 
-    setupEvents();      // UI
-    initBitrixSafe();   // Bitrix (если есть)
+    setupEvents();
+    initBitrix();
 
   });
 
