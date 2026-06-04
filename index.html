@@ -2,249 +2,124 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Lavina Booking CRM Field</title>
+  <title>Lavina Booking Bitrix App</title>
 
   <style>
     body {
       font-family: Arial;
-      padding: 10px;
-      margin: 0;
+      padding: 20px;
     }
 
-    /* ===== ЕДИНАЯ КНОПКА ===== */
-    .btn {
-      display: inline-flex;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      overflow: hidden;
-      background: #fff;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .btn-main {
-      padding: 8px 12px;
-      font-size: 13px;
-      background: #fff;
-      border: none;
-    }
-
-    .btn-arrow {
-      padding: 8px 10px;
-      border: none;
-      border-left: 1px solid #ddd;
-      background: #f5f5f5;
-    }
-
-    /* ===== DROPDOWN ===== */
-    .dropdown {
-      position: absolute;
-      margin-top: 6px;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      min-width: 240px;
-      display: none;
-      z-index: 99999;
-    }
-
-    .item {
-      padding: 8px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-    }
-
-    .item:hover {
-      background: #f2f2f2;
-    }
-
-    .code {
-      font-size: 11px;
-      color: #999;
+    .log {
+      font-size: 12px;
+      color: #444;
+      white-space: pre-line;
     }
   </style>
 </head>
 
 <body>
 
-<!-- ===== КНОПКА ===== -->
-<div class="btn" id="bookingBtn">
-  <button class="btn-main" id="mainBtn"></button>
-  <button class="btn-arrow" id="arrowBtn">▼</button>
-</div>
+<h3>Lavina Booking — Bitrix Init</h3>
 
-<!-- ===== СПИСОК ===== -->
-<div id="dropdown" class="dropdown"></div>
+<div class="log" id="log">Ожидание запуска...</div>
 
 <script>
 
-  /***********************
-   * 1. ОТЕЛИ (ВАЖНО)
-   ***********************/
-  const hotels = [
-    { name: "ОТЕЛЬ 1", providerId: "16478" },
-    { name: "ОТЕЛЬ 2", providerId: "22222" },
-    { name: "ОТЕЛЬ 3", providerId: "33333" }
-  ];
+let fieldCreated = false;
 
-  let selectedHotel = hotels[0];
+/* =========================
+   ЛОГИ
+========================= */
+function log(msg) {
+  document.getElementById("log").innerText += "\n" + msg;
+}
 
-  let dealId = null;
-  let contactId = null;
+/* =========================
+   1. ИНИЦИАЛИЗАЦИЯ BITRIX
+========================= */
+function initBitrix() {
 
-  /***********************
-   * 2. BITRIX INIT
-   ***********************/
-  function initBitrix() {
+  if (typeof BX24 === "undefined") {
+    log("❌ BX24 не найден — приложение открыто вне Bitrix");
+    return;
+  }
 
-    if (typeof BX24 === "undefined") {
-      console.log("Не Bitrix среда — работаем как standalone");
-      return;
+  BX24.init(function () {
+
+    log("✔ BX24 инициализация успешна");
+
+    try {
+      const placement = BX24.placement.info();
+      log("✔ Placement получен: " + JSON.stringify(placement));
+    } catch (e) {
+      log("⚠ Placement недоступен");
     }
 
-    BX24.init(() => {
-
-      try {
-        const placement = BX24.placement.info();
-        dealId = placement?.options?.ID || null;
-
-        console.log("Deal ID:", dealId);
-
-      } catch (e) {
-        console.log("Bitrix context недоступен");
-      }
-
-      ensureFieldExists();
-    });
-  }
-
-  /***********************
-   * 3. СОЗДАНИЕ ПОЛЯ (ЕСЛИ НЕТ)
-   ***********************/
-  function ensureFieldExists() {
-
-    BX24.callMethod(
-      "crm.userfield.list",
-      {
-        filter: { FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTON" }
-      },
-      function(res) {
-
-        const fields = res.data();
-
-        if (!fields || fields.length === 0) {
-
-          BX24.callMethod(
-            "crm.userfield.add",
-            {
-              fields: {
-                FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTON",
-                USER_TYPE_ID: "string",
-                EDIT_FORM_LABEL: "Lavina Booking",
-                LIST_COLUMN_LABEL: "Lavina Booking"
-              }
-            },
-            function(r) {
-              console.log("Поле создано", r);
-            }
-          );
-
-        } else {
-          console.log("Поле уже существует");
-        }
-      }
-    );
-  }
-
-  /***********************
-   * 4. UI
-   ***********************/
-  function renderButton() {
-    document.getElementById("mainBtn").innerText =
-      `Забронировать в ${selectedHotel.name}`;
-  }
-
-  function renderDropdown() {
-
-    const dd = document.getElementById("dropdown");
-    dd.innerHTML = "";
-
-    hotels.forEach(h => {
-
-      const div = document.createElement("div");
-      div.className = "item";
-
-      div.innerHTML = `
-        <span>${h.name}</span>
-        <span class="code">${h.providerId}</span>
-      `;
-
-      // 1 КЛИК = ВЫБОР + БРОНЬ
-      div.onclick = () => {
-        selectedHotel = h;
-        renderButton();
-        dd.style.display = "none";
-        openTravelLine();
-      };
-
-      dd.appendChild(div);
-    });
-  }
-
-  /***********************
-   * 5. TRAVEL LINE
-   ***********************/
-  function openTravelLine() {
-
-    const payload = {
-      firstName: "Test",
-      lastName: "User",
-      providerId: selectedHotel.providerId,
-      dealId: dealId || "0",
-      contactId: contactId || "0"
-    };
-
-    const url =
-      "https://secure.travelline.ru/app/webpms/extranet/#/WebPmsBookingNew/" +
-      encodeURIComponent(JSON.stringify(payload)) +
-      "/WebPmsReservations";
-
-    window.open(url, "_blank");
-  }
-
-  /***********************
-   * 6. EVENTS (ВАЖНО UX)
-   ***********************/
-  function bindEvents() {
-
-    const main = document.getElementById("mainBtn");
-    const arrow = document.getElementById("arrowBtn");
-    const dd = document.getElementById("dropdown");
-
-    // 1 КЛИК = БРОНЬ
-    main.onclick = openTravelLine;
-
-    // СТРЕЛКА = СПИСОК
-    arrow.onclick = (e) => {
-      e.stopPropagation();
-      dd.style.display = dd.style.display === "block" ? "none" : "block";
-    };
-
-    document.addEventListener("click", () => {
-      dd.style.display = "none";
-    });
-  }
-
-  /***********************
-   * 7. START
-   ***********************/
-  window.addEventListener("load", () => {
-    renderButton();
-    renderDropdown();
-    bindEvents();
-    initBitrix();
+    ensureFieldExists();
   });
+}
+
+/* =========================
+   2. СОЗДАНИЕ ПОЛЯ CRM
+========================= */
+function ensureFieldExists() {
+
+  if (fieldCreated) return;
+
+  log("🔎 Проверяем пользовательское поле...");
+
+  BX24.callMethod(
+    "crm.userfield.list",
+    {
+      filter: {
+        FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTON"
+      }
+    },
+    function(res) {
+
+      const data = res.data();
+
+      if (!data || data.length === 0) {
+
+        log("➕ Поле не найдено, создаём...");
+
+        BX24.callMethod(
+          "crm.userfield.add",
+          {
+            fields: {
+              FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTON",
+              USER_TYPE_ID: "string",
+              EDIT_FORM_LABEL: "Lavina Booking Button",
+              LIST_COLUMN_LABEL: "Lavina Booking"
+            }
+          },
+          function(r) {
+
+            fieldCreated = true;
+
+            if (r.error()) {
+              log("❌ Ошибка создания поля: " + JSON.stringify(r.error()));
+            } else {
+              log("✔ Поле успешно создано");
+            }
+          }
+        );
+
+      } else {
+        log("✔ Поле уже существует");
+      }
+    }
+  );
+}
+
+/* =========================
+   3. START
+========================= */
+window.addEventListener("load", function () {
+  log("🚀 Старт приложения");
+  initBitrix();
+});
 
 </script>
 
