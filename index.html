@@ -10,41 +10,42 @@
       padding: 10px;
     }
 
-    /* Контейнер поля */
-    .wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    /* ===== ЕДИНАЯ КНОПКА ===== */
+    .btn-wrap {
+      display: inline-flex;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
     }
 
-    /* Основная кнопка */
-    .btn {
-      padding: 6px 10px;
+    /* ОСНОВНАЯ ЧАСТЬ КНОПКИ */
+    .btn-main {
+      padding: 8px 12px;
       font-size: 13px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: white;
       cursor: pointer;
+      border: none;
+      background: #fff;
       white-space: nowrap;
     }
 
-    /* Стрелка dropdown */
-    .arrow {
-      padding: 6px 8px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background: #f5f5f5;
+    /* СТРЕЛКА */
+    .btn-arrow {
+      padding: 8px 10px;
       cursor: pointer;
+      border: none;
+      border-left: 1px solid #ddd;
+      background: #f5f5f5;
     }
 
-    /* dropdown */
+    /* DROPDOWN */
     .dropdown {
       position: absolute;
       margin-top: 6px;
       border: 1px solid #ddd;
-      background: white;
+      background: #fff;
       border-radius: 6px;
-      min-width: 220px;
+      min-width: 240px;
       display: none;
       z-index: 9999;
     }
@@ -52,6 +53,8 @@
     .item {
       padding: 8px;
       cursor: pointer;
+      display: flex;
+      justify-content: space-between;
     }
 
     .item:hover {
@@ -59,26 +62,27 @@
     }
 
     .code {
-      font-size: 11px;
       color: #999;
-      margin-left: 6px;
+      font-size: 11px;
     }
   </style>
 </head>
 
 <body>
 
-<div class="wrap">
-  <button id="mainBtn" class="btn">Загрузка...</button>
-  <button id="arrowBtn" class="arrow">▼</button>
+<!-- ===== КНОПКА ===== -->
+<div class="btn-wrap">
+  <button id="mainBtn" class="btn-main"></button>
+  <button id="arrowBtn" class="btn-arrow">▼</button>
 </div>
 
+<!-- ===== СПИСОК ===== -->
 <div id="dropdown" class="dropdown"></div>
 
 <script>
 
   /* =========================
-     1. ДАННЫЕ
+     1. ДАННЫЕ ОТЕЛЕЙ
      ========================= */
 
   let hotels = [
@@ -93,86 +97,33 @@
   let contactId = null;
 
   /* =========================
-     2. BITRIX SAFE INIT
+     2. BITRIX INIT (БЕЗОПАСНО)
      ========================= */
 
   function initBitrix() {
 
-    if (typeof BX24 === "undefined") {
-      console.warn("BX24 not found → standalone mode");
-      return;
-    }
+    if (typeof BX24 === "undefined") return;
 
-    BX24.init(function () {
-
+    BX24.init(() => {
       try {
-        const placement = BX24.placement.info();
-
-        dealId = placement?.options?.ID || null;
-
-        console.log("Deal ID:", dealId);
-
-      } catch (e) {
-        console.error("Bitrix init error", e);
-      }
-
-      /* =========================
-         2.1 AUTO FIELD CHECK + CREATE
-         ========================= */
-
-      ensureFieldExists();
+        const p = BX24.placement.info();
+        dealId = p?.options?.ID || null;
+      } catch (e) {}
     });
   }
 
   /* =========================
-     3. СОЗДАНИЕ / ПРОВЕРКА ПОЛЯ
+     3. ОТОБРАЖЕНИЕ КНОПКИ
      ========================= */
 
-  function ensureFieldExists() {
-
-    BX24.callMethod(
-      "crm.userfield.list",
-      {
-        filter: { FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTOM" }
-      },
-      function (res) {
-
-        const fields = res.data();
-
-        if (!fields || fields.length === 0) {
-
-          console.log("Field not found → creating");
-
-          BX24.callMethod(
-            "crm.userfield.add",
-            {
-              fields: {
-                FIELD_NAME: "UF_CRM_LAVINA_BOOKING_BUTTOM",
-                USER_TYPE_ID: "string",
-                EDIT_FORM_LABEL: "Lavina Booking Button",
-                LIST_COLUMN_LABEL: "Lavina Booking"
-              }
-            },
-            function (r) {
-              console.log("Field created", r);
-            }
-          );
-
-        } else {
-          console.log("Field already exists");
-        }
-      }
-    );
-  }
-
-  /* =========================
-     4. UI RENDER
-     ========================= */
-
-  function render() {
+  function renderButton() {
     document.getElementById("mainBtn").innerText =
       `Забронировать в ${selectedHotel.name}`;
   }
+
+  /* =========================
+     4. DROPDOWN С ОТЕЛЯМИ
+     ========================= */
 
   function renderDropdown() {
 
@@ -184,12 +135,17 @@
       const div = document.createElement("div");
       div.className = "item";
 
-      div.innerHTML = `${h.name} <span class="code">${h.providerId}</span>`;
+      div.innerHTML = `
+        <span>${h.name}</span>
+        <span class="code">${h.providerId}</span>
+      `;
 
+      /* ===== ВЫБОР ОТЕЛЯ = СРАЗУ БРОНЬ ===== */
       div.onclick = () => {
         selectedHotel = h;
-        render();
+        renderButton();
         dd.style.display = "none";
+        openTravelLine();
       };
 
       dd.appendChild(div);
@@ -197,7 +153,7 @@
   }
 
   /* =========================
-     5. TRAVELLINE OPEN
+     5. TRAVEL LINE OPEN
      ========================= */
 
   function openTravelLine() {
@@ -224,16 +180,18 @@
 
   function bindEvents() {
 
-    const btn = document.getElementById("mainBtn");
+    const main = document.getElementById("mainBtn");
     const arrow = document.getElementById("arrowBtn");
     const dd = document.getElementById("dropdown");
 
-    btn.addEventListener("click", openTravelLine);
+    /* ===== КЛИК ПО ОСНОВНОЙ КНОПКЕ = БРОНЬ ===== */
+    main.onclick = openTravelLine;
 
-    arrow.addEventListener("click", (e) => {
+    /* ===== СТРЕЛКА = ОТКРЫТЬ СПИСОК ===== */
+    arrow.onclick = (e) => {
       e.stopPropagation();
       dd.style.display = dd.style.display === "block" ? "none" : "block";
-    });
+    };
 
     document.addEventListener("click", () => {
       dd.style.display = "none";
@@ -241,12 +199,12 @@
   }
 
   /* =========================
-     7. START
+     7. СТАРТ
      ========================= */
 
   window.addEventListener("load", () => {
 
-    render();
+    renderButton();
     renderDropdown();
     bindEvents();
     initBitrix();
