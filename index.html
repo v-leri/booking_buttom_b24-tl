@@ -1,1 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>LavinaBooking TL</title>
 
+  <script src="https://api.bitrix24.com/api/v1/"></script>
+
+  <style>
+    body {
+      font-family: Arial;
+      padding: 20px;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .dropdown {
+      margin-top: 10px;
+      display: none;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 10px;
+      background: #fff;
+      max-width: 300px;
+    }
+
+    .item {
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .item:hover {
+      background: #f2f2f2;
+    }
+
+    .code {
+      color: #999;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+  </style>
+</head>
+
+<body>
+
+<button class="btn" id="mainBtn">
+  Забронировать в ОТЕЛЬ 1 ▼
+</button>
+
+<div class="dropdown" id="dropdown"></div>
+
+<script>
+
+let hotels = [];
+let selectedHotel = null;
+let dealId = null;
+let contactId = null;
+
+// загрузка отелей
+fetch("hotels.json")
+  .then(r => r.json())
+  .then(data => {
+    hotels = data;
+    selectedHotel = hotels[0];
+    renderButton();
+    renderDropdown();
+  });
+
+// Bitrix context
+BX24.init(function () {
+  const placement = BX24.placement.info();
+  dealId = placement.options.ID;
+});
+
+// кнопка
+function renderButton() {
+  document.getElementById("mainBtn").innerText =
+    `Забронировать в ${selectedHotel.name} ▼`;
+}
+
+// dropdown
+function renderDropdown() {
+  const dd = document.getElementById("dropdown");
+  dd.innerHTML = "";
+
+  hotels.forEach(h => {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    div.innerHTML = `
+      ${h.name}
+      <span class="code">${h.providerId}</span>
+    `;
+
+    div.onclick = () => {
+      selectedHotel = h;
+      renderButton();
+      dd.style.display = "none";
+    };
+
+    dd.appendChild(div);
+  });
+}
+
+// toggle dropdown
+document.getElementById("mainBtn").onclick = () => {
+  const dd = document.getElementById("dropdown");
+  dd.style.display = dd.style.display === "block" ? "none" : "block";
+};
+
+// клик вне
+document.addEventListener("click", function(e) {
+  if (!e.target.closest(".btn") && !e.target.closest(".dropdown")) {
+    document.getElementById("dropdown").style.display = "none";
+  }
+});
+
+// TravelLine
+function book() {
+
+  const payload = {
+    firstName: "Test",
+    lastName: "User",
+    providerId: selectedHotel.providerId,
+    dealId: dealId || "0",
+    contactId: contactId || "0"
+  };
+
+  const url =
+    "https://secure.travelline.ru/app/webpms/extranet/#/WebPmsBookingNew/" +
+    encodeURIComponent(JSON.stringify(payload)) +
+    "/WebPmsReservations";
+
+  const win = window.open("", "_blank");
+  win.location.href = url;
+}
+
+// двойной клик по кнопке = бронирование
+document.getElementById("mainBtn").ondblclick = book;
+
+</script>
+
+</body>
+</html>
